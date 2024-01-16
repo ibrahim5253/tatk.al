@@ -182,10 +182,10 @@ def login_and_search():
 
         driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="captcha"]').send_keys(captchaResp)
         driver.execute_script('arguments[0].removeAttribute("src");', captcha)
-        time.sleep(0.5)
         js_click(
             driver.find_element(By.CSS_SELECTOR, "app-login button[type='submit'].search_btn.train_Search")
         )
+        wait_to_load()
         invalidCaptcha = driver.find_element(
             By.XPATH,
             "//*[./img[contains(@class, captcha-img) "
@@ -196,8 +196,6 @@ def login_and_search():
             continue
         else:
             break
-
-    wait_to_load()
 
     # Search trains
 
