@@ -116,8 +116,6 @@ if not args.test:
     with open('creds/card.json') as f:
         card = json.load(f)
 
-    with open('creds/login.json') as f:
-        login = json.load(f)
 else:
     logging.info('starting test run')
     journey = test_journey
@@ -125,6 +123,9 @@ else:
     journey['date'] = d.strftime('%d %b')
     journey['sdate'] = d.strftime('%d/%m/%Y')
     card = {"number": "4596610105467672", "exp": "0129", "cvv": "364", "postal": "UB56AG"}
+
+with open('creds/login.json') as f:
+    login = json.load(f)
 
 dryrun = args.dryrun
 autocaptcha = not args.noautocaptcha
