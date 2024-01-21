@@ -134,88 +134,126 @@ def wait_to_load():
             break
     driver.implicitly_wait(default_wait)
 
-def login_and_search():
-    driver.get('https://www.irctc.co.in/')
-    js_click(
-        driver.find_element(By.CSS_SELECTOR, 'a[aria-label="Click here to Login in application"]')
-    )
-    driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="userid"]').send_keys(login['id'])
-    driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="password"]').send_keys(login['password'])
-
-    captchaResp = None
-    while True:
-        captcha = driver.find_element(By.CSS_SELECTOR, 'app-captcha img.captcha-img')
-        captchaImg = captcha.get_attribute('src')
-        if args.auto or (autocaptcha and captchaResp is None):
-            captchaResp = solve_captcha(captchaImg)
-            print('captcha guess: ', captchaResp)
-        else:
-            captchaResp = input('enter captcha here')
-
-        driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="captcha"]').send_keys(captchaResp)
-        # fixme may throw a stale reference exception
-        driver.execute_script('arguments[0].removeAttribute("src");', captcha)
-        js_click(
-            driver.find_element(By.CSS_SELECTOR, "app-login button[type='submit'].search_btn.train_Search")
-        )
-        wait_to_load()
-        invalidCaptcha = driver.find_element(
-            By.XPATH,
-            "//*[./img[contains(@class, captcha-img) "
-                "and (contains(@src, 'data:image/jpg'))] "
-            "or @aria-label='Click here Logout from application']")
-        if 'Logout' not in invalidCaptcha.get_attribute('innerHTML'):
-            logging.warning('captcha failed')
-            continue
-        else:
-            break
-
-    # Search trains
-
-    for place, sel in zip((journey["from"], journey["to"]), ('pr_id_1_list', 'pr_id_2_list')):
-        elem = driver.find_element(By.CSS_SELECTOR, f'input[aria-controls="{sel}"]')
-        elem.clear()
-        elem.send_keys(place['code'])
-        js_click(
-            driver.find_element(By.XPATH,
-                                f"//*[@id='{sel}']/li[.//*[normalize-space(text())='{place['fullname']}'] and "
-                                f".//*[normalize-space(text())='{place['state']}']]")
-        )
-
-    js_click(
-        driver.find_element(By.CSS_SELECTOR, 'p-dropdown[formcontrolname="journeyQuota"] > div')
-    )
-    js_click(
-        driver.find_element(By.CSS_SELECTOR, f'p-dropdownitem li[aria-label="{journey.get("quota", "TATKAL")}"]')
-    )
-
-    dt = driver.find_element(By.CSS_SELECTOR, "p-calendar input[type='text']")
-    js_click(dt)
-    for _ in range(10): dt.send_keys(Keys.RIGHT)
-    for _ in range(10): dt.send_keys(Keys.BACKSPACE)
-    dt.send_keys(journey['date'])
-
-    # fixme may click not get registered?
-    js_click(driver.find_element(By.CSS_SELECTOR, "button[type='submit'].search_btn.train_Search"))
-
-    wait_to_load()
-
 
 train = journey["train"]
 cls   = journey["class"]
 date  = datetime.strptime(
         journey["date"] , '%d/%m/%Y').strftime('%d %b')
 
+def fill_input(elem, content):
+    for _ in range(10): elem.send_keys(Keys.RIGHT)
+    for _ in range(10): elem.send_keys(Keys.BACKSPACE)
+    elem.send_keys(content)
+
+step_ident = {
+    1: 'name()="app-login"',
+    2: './/app-jp-input and .//*[@aria-label="Click here Logout from application"]',
+    3: 'name()="app-train-list"',
+    4: 'name()="app-passenger-input"',
+    5: 'name()="app-review-booking"',
+    6: 'name()="app-payment-options"',
+    7: '@id="gl_card_number"'
+}
+
+def get_step(elem):
+    for step, ident in step_ident.items():
+        if elem.find_elements(By.XPATH, f'//*[{ident}]'):
+            return step
+    else:
+        raise ValueError('No matching step')
+
 def continue_booking(step):
     try:
         if step <= 0:
-            logging.info('continuing to login and search')
-            login_and_search()
+            logging.info('init')
+
+            driver.get('https://www.irctc.co.in/')
+
+        if step <= 1:
+            logging.info('login screen')
+
+            js_click(
+                driver.find_element(By.CSS_SELECTOR, 'a[aria-label="Click here to Login in application"]')
+            )
+            userid = driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="userid"]')
+            fill_input(userid, login['id'])
+
+            pwd = driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="password"]')
+            fill_input(pwd, login['password'])
+
+            captchaResp = None
+            while True:
+                captcha = driver.find_element(By.CSS_SELECTOR, 'app-captcha img.captcha-img')
+                captchaImg = captcha.get_attribute('src')
+                if args.auto or (autocaptcha and captchaResp is None):
+                    captchaResp = solve_captcha(captchaImg)
+                    print('captcha guess: ', captchaResp)
+                else:
+                    captchaResp = input('enter captcha here')
+
+                fill_input(
+                    driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="captcha"]'),
+                    captchaResp
+                )
+                # fixme may throw a stale reference exception
+                driver.execute_script('arguments[0].removeAttribute("src");', captcha)
+                js_click(
+                    driver.find_element(By.CSS_SELECTOR, "app-login button[type='submit'].search_btn.train_Search")
+                )
+                wait_to_load()
+                invalidCaptcha = driver.find_element(
+                    By.XPATH,
+                    "//*[./img[contains(@class, captcha-img) "
+                        "and (contains(@src, 'data:image/jpg'))] "
+                    "or @aria-label='Click here Logout from application']")
+                if 'Logout' not in invalidCaptcha.get_attribute('innerHTML'):
+                    logging.warning('captcha failed')
+                    continue
+                else:
+                    break
+
+        if step <= 2:
+            logging.info('search trains')
+
+            for place, sel in zip((journey["from"], journey["to"]), ('pr_id_1_list', 'pr_id_2_list')):
+                fill_input(
+                    driver.find_element(By.CSS_SELECTOR, f'input[aria-controls="{sel}"]'),
+                    place['code']
+                )
+                js_click(
+                    driver.find_element(By.XPATH,
+                                        f"//*[@id='{sel}']/li[.//*[normalize-space(text())='{place['fullname']}'] and "
+                                        f".//*[normalize-space(text())='{place['state']}']]")
+                )
+
+            js_click(
+                driver.find_element(By.CSS_SELECTOR, 'p-dropdown[formcontrolname="journeyQuota"] > div')
+            )
+            js_click(
+                driver.find_element(By.CSS_SELECTOR, f'p-dropdownitem li[aria-label="{journey.get("quota", "TATKAL")}"]')
+            )
+
+            dt = driver.find_element(By.CSS_SELECTOR, "p-calendar input[type='text']")
+            js_click(dt)
+            fill_input(dt, journey['date'])
+
+            # fixme may click not get registered?
+            js_click(driver.find_element(By.CSS_SELECTOR, "button[type='submit'].search_btn.train_Search"))
+
+            wait_to_load()
 
         # Navigate to the train -> class
 
-        if step <= 1:
+        if step <= 3:
             logging.info(f'navigating to {train} {cls}')
+            js_click(
+               driver.find_element(
+                   By.XPATH,
+                   "//button[.//*[normalize-space(text())='Modify Search'] and "
+                   "not(./ancestor::p-sidebar)]"
+               )
+            )
+            wait_to_load()
             js_click(
                 driver.find_element(
                     By.XPATH,
@@ -225,9 +263,8 @@ def continue_booking(step):
             )
             wait_to_load()
 
-        # Get availability for the date and start booking 
+            # Get availability for the date and start booking 
 
-        if step <= 2:
             while True:
                 logging.info(f'getting availability for {train} {cls} {date}')
                 js_click(
@@ -266,7 +303,9 @@ def continue_booking(step):
 
         # Passenger input
 
-        if step <= 3:
+        if step <= 4:
+            logging.info('passenger input')
+
             for i, px in enumerate(journey["psngs"]):
                 if i > 3: break
                 logging.info(f'adding passenger {px}')
@@ -282,13 +321,11 @@ def continue_booking(step):
 
                 pName = appPx\
                 .find_element(By.CSS_SELECTOR, 'input[placeholder="Passenger Name"]')
-                pName.clear()
-                pName.send_keys(px['name'])
+                fill_input(pName, px['name'])
                 
                 pAge = appPx\
                 .find_element(By.CSS_SELECTOR, 'input[formcontrolname="passengerAge"]')
-                pAge.clear()
-                pAge.send_keys(str(px['age']))
+                fill_input(pAge, str(px['age']))
                 
                 Select(
                     appPx.find_element(By.CSS_SELECTOR, 'select[formcontrolname="passengerGender"]')
@@ -317,7 +354,7 @@ def continue_booking(step):
 
         # Review booking
 
-        if step <= 4:
+        if step <= 5:
             logging.info(f'reviewing booking')
             captchaResp = None
             while True:
@@ -328,7 +365,10 @@ def continue_booking(step):
                     captchaResp = input('enter captcha here: ')
 
 
-                driver.find_element(By.CSS_SELECTOR, '#captcha').send_keys(captchaResp)
+                fill_input(
+                    driver.find_element(By.CSS_SELECTOR, '#captcha'),
+                    captchaResp
+                )
                 js_click(
                     driver.find_element(By.CSS_SELECTOR, 'button[type="submit"].train_Search.btnDefault')
                 )
@@ -351,7 +391,7 @@ def continue_booking(step):
 
         # Payment Options
 
-        if step <= 5:
+        if step <= 6:
             logging.info(f'selecting payment option')
             mpsBtn = driver.find_element(
                 By.XPATH
@@ -364,20 +404,13 @@ def continue_booking(step):
 
         # Payment Gateway
 
-        if step <= 6:
+        if step <= 7:
             logging.info(f'on payment gateway')
-            driver.implicitly_wait(30)
-            card_num = driver.find_element(
-                By.XPATH
-                , '//*[@id="gl_card_number" or contains(text(), "Multiple Payment Service")]')
-            if "Multiple Payment Service" in card_num.get_attribute('innerHTML'):
-                logging.warning('redirected to payment options again')
-                driver.implicitly_wait(default_wait)
-                return continue_booking(5)
-            card_num.send_keys(card['number'])
-            driver.find_element(By.ID, 'gl_card_expiryDate').send_keys(card['exp'])
-            driver.find_element(By.ID, 'gl_card_securityCode').send_keys(card['cvv'])
-            driver.find_element(By.ID, 'gl_billing_addressPostalCode').send_keys(card['postal'])
+            # driver.implicitly_wait(30)
+            fill_input(driver.find_element(By.ID, 'gl_card_number'), card['number'])
+            fill_input(driver.find_element(By.ID, 'gl_card_expiryDate'), card['exp'])
+            fill_input(driver.find_element(By.ID, 'gl_card_securityCode'), card['cvv'])
+            fill_input(driver.find_element(By.ID, 'gl_billing_addressPostalCode'), card['postal'])
             js_click(driver.find_element(By.ID, 'network_dcc_2'))
             js_click(driver.find_element(By.ID, 'continue_in_foreign_currency_button'))
             if not dryrun:
@@ -385,15 +418,31 @@ def continue_booking(step):
 
     except:
         logging.exception('Error continuing booking')
-        if args.auto:
-            sys.exit(1)
-        step = int(input('something went wrong. enter step to continue from (0: login, 1: select train, 2: get avail, 3: psgn input, 4: review, 5: pay options, 6: payment): '))
+
+        driver.implicitly_wait(0)
+        try: 
+            xpath = f'//*[{" or ".join("(" + x + ")" for x in step_ident.values())}]'
+            elem = driver.find_element(By.XPATH, xpath)
+            step = get_step(elem)
+        except:
+            logging.error('cannot identify the step to continue.')
+            if args.auto: sys.exit(0)
+
+            step = int(input(
+                'Enter step to continue from:\n'
+                '0: init\n'
+                '1: login\n'
+                '2: search train\n'
+                '3: get avail\n'
+                '4: psgn input\n'
+                '5: review\n'
+                '6: pay options\n'
+                '7: payment\n'
+                '>>> '))
+
         driver.implicitly_wait(default_wait)
         continue_booking(step)
 
 continue_booking(0)
-
-if args.auto:
-    sys.exit(0)
 
 _ = input('Enter to quit')
