@@ -25,7 +25,7 @@ logging.basicConfig(
 logging.getLogger().addHandler(logging.StreamHandler())
 
 from io import BytesIO
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
@@ -120,8 +120,7 @@ else:
     logging.info('starting test run')
     journey = test_journey
     d = date.today() + timedelta(days=1)
-    journey['date'] = d.strftime('%d %b')
-    journey['sdate'] = d.strftime('%d/%m/%Y')
+    journey['date'] = d.strftime('%d/%m/%Y')
     card = {"number": "4596610105467672", "exp": "0129", "cvv": "364", "postal": "UB56AG"}
 
 with open('creds/login.json') as f:
@@ -220,7 +219,7 @@ def login_and_search():
     js_click(dt)
     for _ in range(10): dt.send_keys(Keys.RIGHT)
     for _ in range(10): dt.send_keys(Keys.BACKSPACE)
-    dt.send_keys(journey['sdate'])
+    dt.send_keys(journey['date'])
 
     js_click(driver.find_element(By.CSS_SELECTOR, "button[type='submit'].search_btn.train_Search"))
 
@@ -229,7 +228,8 @@ def login_and_search():
 
 train = journey["train"]
 cls   = journey["class"]
-date  = journey["date" ]
+date  = datetime.strptime(
+        journey["date"] , '%d/%m/%Y').strftime('%d %b')
 
 def continue_booking(step):
     try:
