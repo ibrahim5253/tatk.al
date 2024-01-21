@@ -26,6 +26,7 @@ logging.getLogger().addHandler(logging.StreamHandler())
 
 from io import BytesIO
 from datetime import date, timedelta, datetime
+from pathlib import Path
 
 from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
@@ -38,7 +39,11 @@ from selenium.webdriver.common.keys import Keys
 
 import requests
 
-with open('creds/openai_key.json') as f:
+
+work_dir = Path(sys.argv[0]).parent
+cred_dir = work_dir / 'creds'
+
+with open(cred_dir / 'openai_key.json') as f:
     api_key = json.load(f)
 
 def solve_captcha(base64_image):
@@ -79,27 +84,23 @@ parser.add_argument('-d', "--dryrun", help="dry run; stop before payment",
                                         action="store_true")
 parser.add_argument('-n', "--noautocaptcha", help="dont try to solve captcha",
                                         action="store_true")
-parser.add_argument('-t', "--test", help="use test data/creds",
+parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
                                         action="store_true")
 args = parser.parse_args()
 
 default_wait = 5 # secs
 
-journey_f = f'creds/{"test" if args.test else ""}/journey.json'
-card_f = f'creds/{"test" if args.test else ""}/card.json'
-login_f = f'creds/{"test" if args.test else ""}/login.json'
-
-with open(journey_f) as f:
+with open(cred_dir / 'journey.json') as f:
     journey = json.load(f)
 
-with open(card_f) as f:
+with open(cred_dir / 'card.json') as f:
     card = json.load(f)
 
 if 'date' not in journey:
     d = date.today() + timedelta(days=1)
     journey['date'] = d.strftime('%d/%m/%Y')
 
-with open(login_f) as f:
+with open(cred_dir / 'login.json') as f:
     login = json.load(f)
 
 dryrun = args.dryrun
@@ -114,7 +115,7 @@ with open('config.json') as f:
 
 chrome_options = Options()
 chrome_options.add_argument("--window-size=1920,1080")
-# if args.test:
+# if args.auto:
 #    chrome_options.add_argument("--headless=new")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 driver.implicitly_wait(default_wait)
@@ -145,7 +146,7 @@ def login_and_search():
     while True:
         captcha = driver.find_element(By.CSS_SELECTOR, 'app-captcha img.captcha-img')
         captchaImg = captcha.get_attribute('src')
-        if args.test or (autocaptcha and captchaResp is None):
+        if args.auto or (autocaptcha and captchaResp is None):
             captchaResp = solve_captcha(captchaImg)
             print('captcha guess: ', captchaResp)
         else:
@@ -320,7 +321,7 @@ def continue_booking(step):
             logging.info(f'reviewing booking')
             captchaResp = None
             while True:
-                if args.test or (autocaptcha and captchaResp is None):
+                if args.auto or (autocaptcha and captchaResp is None):
                     captcha = driver.find_element(By.CSS_SELECTOR, 'app-captcha img.captcha-img').get_property('src')
                     captchaResp = solve_captcha(captcha)
                 else:
@@ -381,13 +382,10 @@ def continue_booking(step):
             js_click(driver.find_element(By.ID, 'continue_in_foreign_currency_button'))
             if not dryrun:
                 js_click(driver.find_element(By.ID, 'card_paynow_button'))
-                if args.test:
-                    driver.find_element(By.ID, 'retry_paynow_button')
-                    logging.info('test run success')
 
     except:
         logging.exception('Error continuing booking')
-        if args.test:
+        if args.auto:
             sys.exit(1)
         step = int(input('something went wrong. enter step to continue from (0: login, 1: select train, 2: get avail, 3: psgn input, 4: review, 5: pay options, 6: payment): '))
         driver.implicitly_wait(default_wait)
@@ -395,7 +393,7 @@ def continue_booking(step):
 
 continue_booking(0)
 
-if args.test:
+if args.auto:
     sys.exit(0)
 
 _ = input('Enter to quit')

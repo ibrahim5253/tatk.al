@@ -1,2 +1,4 @@
 creds
+bin
 *.pyc
+*.log
