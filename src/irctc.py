@@ -41,30 +41,6 @@ import requests
 with open('creds/openai_key.json') as f:
     api_key = json.load(f)
 
-test_journey = \
-{
-  "train": "22944",
-  "from": {
-    "code": "RTM",
-    "fullname": "RATLAM JN - RTM",
-    "state": "MADHYA PRADESH"
-  },
-  "to": {
-    "code": "PUNE",
-    "fullname": "PUNE JN - PUNE",
-    "state": "MAHARASHTRA"
-  },
-  "class": "3A",
-  "psngs": [
-    {
-      "name": "John",
-      "age": 31,
-      "sex": "Male"
-    }
-  ],
-  "bookwl": True
-}
-
 def solve_captcha(base64_image):
     headers = {
       "Content-Type": "application/json",
@@ -103,25 +79,24 @@ parser.add_argument('-d', "--dryrun", help="dry run; stop before payment",
                                         action="store_true")
 parser.add_argument('-n', "--noautocaptcha", help="dont try to solve captcha",
                                         action="store_true")
-parser.add_argument('-t', "--test", help="run test in non-interactive mode",
+parser.add_argument('-t', "--test", help="use test data/creds",
                                         action="store_true")
 args = parser.parse_args()
 
 default_wait = 5 # secs
 
-if not args.test:
-    with open('creds/journey.json') as f:
-        journey = json.load(f)
+journey_f = f'creds/{"test" if args.test else ""}/journey.json'
+card_f = f'creds/{"test" if args.test else ""}/card.json'
 
-    with open('creds/card.json') as f:
-        card = json.load(f)
+with open(journey_f) as f:
+    journey = json.load(f)
 
-else:
-    logging.info('starting test run')
-    journey = test_journey
+with open(card_f) as f:
+    card = json.load(f)
+
+if 'date' not in journey:
     d = date.today() + timedelta(days=1)
     journey['date'] = d.strftime('%d/%m/%Y')
-    card = {"number": "4596610105467672", "exp": "0129", "cvv": "364", "postal": "UB56AG"}
 
 with open('creds/login.json') as f:
     login = json.load(f)
@@ -129,21 +104,17 @@ with open('creds/login.json') as f:
 dryrun = args.dryrun
 autocaptcha = not args.noautocaptcha
 if dryrun:
-    print('this is a test run. will stop at the final step')
+    print('this is a dry run. will stop at the final step')
 if not autocaptcha:
     print('auto captcha disabled.')
-
-if dryrun:
-    journey['quota']='GENERAL'
-    journey['bookwl']=True
 
 with open('config.json') as f:
     service = Service(executable_path=json.load(f)['chrome_driver'])
 
 chrome_options = Options()
 chrome_options.add_argument("--window-size=1920,1080")
-if args.test:
-    chrome_options.add_argument("--headless=new")
+# if args.test:
+#    chrome_options.add_argument("--headless=new")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 driver.implicitly_wait(default_wait)
 
@@ -400,9 +371,9 @@ def continue_booking(step):
             js_click(driver.find_element(By.ID, 'continue_in_foreign_currency_button'))
             if not dryrun:
                 js_click(driver.find_element(By.ID, 'card_paynow_button'))
-            if args.test:
-                driver.find_element(By.ID, 'retry_paynow_button')
-                logging.info('test run success')
+                if args.test:
+                    driver.find_element(By.ID, 'retry_paynow_button')
+                    logging.info('test run success')
 
     except:
         logging.exception('Error continuing booking')
