@@ -87,6 +87,7 @@ default_wait = 5 # secs
 
 journey_f = f'creds/{"test" if args.test else ""}/journey.json'
 card_f = f'creds/{"test" if args.test else ""}/card.json'
+login_f = f'creds/{"test" if args.test else ""}/login.json'
 
 with open(journey_f) as f:
     journey = json.load(f)
@@ -98,7 +99,7 @@ if 'date' not in journey:
     d = date.today() + timedelta(days=1)
     journey['date'] = d.strftime('%d/%m/%Y')
 
-with open('creds/login.json') as f:
+with open(login_f) as f:
     login = json.load(f)
 
 dryrun = args.dryrun
