@@ -152,6 +152,7 @@ def login_and_search():
             captchaResp = input('enter captcha here')
 
         driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="captcha"]').send_keys(captchaResp)
+        # fixme may throw a stale reference exception
         driver.execute_script('arguments[0].removeAttribute("src");', captcha)
         js_click(
             driver.find_element(By.CSS_SELECTOR, "app-login button[type='submit'].search_btn.train_Search")
@@ -193,6 +194,7 @@ def login_and_search():
     for _ in range(10): dt.send_keys(Keys.BACKSPACE)
     dt.send_keys(journey['date'])
 
+    # fixme may click not get registered?
     js_click(driver.find_element(By.CSS_SELECTOR, "button[type='submit'].search_btn.train_Search"))
 
     wait_to_load()
@@ -364,7 +366,14 @@ def continue_booking(step):
         if step <= 6:
             logging.info(f'on payment gateway')
             driver.implicitly_wait(30)
-            driver.find_element(By.ID, 'gl_card_number').send_keys(card['number'])
+            card_num = driver.find_element(
+                By.XPATH
+                , '//*[@id="gl_card_number" or contains(text(), "Multiple Payment Service")]')
+            if "Multiple Payment Service" in card_num.get_attribute('innerHTML'):
+                logging.warning('redirected to payment options again')
+                driver.implicitly_wait(default_wait)
+                return continue_booking(5)
+            card_num.send_keys(card['number'])
             driver.find_element(By.ID, 'gl_card_expiryDate').send_keys(card['exp'])
             driver.find_element(By.ID, 'gl_card_securityCode').send_keys(card['cvv'])
             driver.find_element(By.ID, 'gl_billing_addressPostalCode').send_keys(card['postal'])
