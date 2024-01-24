@@ -15,6 +15,7 @@ import json
 import traceback
 import argparse
 import logging
+import requests
 
 logging.basicConfig(
     format='%(asctime)s %(message)s',
@@ -37,7 +38,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 
-import requests
+from gmail import get_otp
 
 
 work_dir = Path(sys.argv[0]).parent
@@ -92,6 +93,8 @@ parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
 parser.add_argument('-p', "--payment", help="payment method to use",
                                         choices=['card', 'wallet'],
                     default='card')
+parser.add_argument('-o', "--otp", help="fetch otp from email",
+                                        action="store_true")
 args = parser.parse_args()
 
 payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
@@ -319,6 +322,7 @@ def continue_booking(step):
 
         if step <= 4:
             logging.info('passenger input')
+            booking_start_ts = datetime.utcnow()
 
             for i, px in enumerate(journey["psngs"]):
                 if i > 3: break
@@ -439,7 +443,10 @@ def continue_booking(step):
                 if not dryrun:
                     js_click(driver.find_element(By.ID, 'card_paynow_button'))
             else: # wallet
-                otp = input('Enter wallet otp: ')
+                if not args.otp:
+                    otp = input('Enter wallet otp: ')
+                else:
+                    otp = get_otp(booking_start_ts, retry=args.auto) or "000000"
                 fill_input(driver.find_element(By.XPATH, '//input[@type="number"]'), otp)
                 if not dryrun:
                     js_click(driver.find_element(By.XPATH, '//button[normalize-space(text())="CONFIRM"]'))
