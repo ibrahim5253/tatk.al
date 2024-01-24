@@ -74,10 +74,13 @@ def solve_captcha(base64_image):
       "max_tokens": 300
     }
     
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-    logging.info(f'openai response: {response.json()}')
+    try:
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        logging.info(f'openai response: {response.json()}')
 
-    return response.json()['choices'][0]['message']['content']
+        return response.json()['choices'][0]['message']['content']
+    except:
+        return -1
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', "--dryrun", help="dry run; stop before payment",
@@ -189,11 +192,14 @@ def continue_booking(step):
                     captchaResp = solve_captcha(captchaImg)
                     print('captcha guess: ', captchaResp)
                 else:
+                    captchaResp = -1
+
+                if captchaResp == -1 and not args.auto:
                     captchaResp = input('enter captcha here')
 
                 fill_input(
                     driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="captcha"]'),
-                    captchaResp
+                    str(captchaResp)
                 )
                 # fixme may throw a stale reference exception
                 driver.execute_script('arguments[0].removeAttribute("src");', captcha)
@@ -322,7 +328,15 @@ def continue_booking(step):
                 pName = appPx\
                 .find_element(By.CSS_SELECTOR, 'input[placeholder="Passenger Name"]')
                 fill_input(pName, px['name'])
-                
+
+                # todo handle master passenger
+                # pr_id = pName.get_attribute('aria-controls')
+                # print(f'pr id: {pr_id}')
+                # driver.implicitly_wait(1)
+                # if opt := driver.find_element(By.ID, pr_id):
+                #     js_click(opt)
+                # driver.implicitly_wait(default_wait)
+
                 pAge = appPx\
                 .find_element(By.CSS_SELECTOR, 'input[formcontrolname="passengerAge"]')
                 fill_input(pAge, str(px['age']))
