@@ -89,7 +89,13 @@ parser.add_argument('-n', "--noautocaptcha", help="dont try to solve captcha",
                                         action="store_true")
 parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
                                         action="store_true")
+parser.add_argument('-p', "--payment", help="payment method to use",
+                                        choices=['card', 'wallet'],
+                    default='card')
 args = parser.parse_args()
+
+payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
+        else 'IRCTC eWallet'
 
 default_wait = 5 # secs
 
@@ -155,7 +161,7 @@ step_ident = {
     4: 'name()="app-passenger-input"',
     5: 'name()="app-review-booking"',
     6: 'name()="app-payment-options"',
-    7: '@id="gl_card_number"'
+    7: '@id="gl_card_number" or name()="app-ewallet-confirm"'
 }
 
 def get_step(elem):
@@ -163,6 +169,8 @@ def get_step(elem):
         if elem.find_elements(By.XPATH, f'//*[{ident}]'):
             return step
     else:
+        if args.auto:
+            return 0
         raise ValueError('No matching step')
 
 def continue_booking(step):
@@ -170,7 +178,7 @@ def continue_booking(step):
         if step <= 0:
             logging.info('init')
 
-            driver.get('https://www.irctc.co.in/')
+            driver.get('https://www.irctc.co.in/nget/train-search')
 
         if step <= 1:
             logging.info('login screen')
@@ -390,8 +398,7 @@ def continue_booking(step):
                 
                 captcha_failure = driver.find_element(
                     By.XPATH
-                    , "//*[contains(text(), 'Multiple Payment Service') or "
-                      "contains(text(), 'Invalid Captcha')]"
+                    , "//*[@id='pay-type' or contains(text(), 'Invalid Captcha')]"
                 )
                 
                 if 'Invalid Captcha' in captcha_failure.get_attribute('innerHTML'):
@@ -409,10 +416,11 @@ def continue_booking(step):
             logging.info(f'selecting payment option')
             mpsBtn = driver.find_element(
                 By.XPATH
-                , "//*[contains(text(), 'Multiple Payment Service')]"
+                , f"//*[@id='pay-type']//*[contains(text(), '{payment_sel}')]"
             )
             js_click(mpsBtn)
-            js_click(driver.find_element(By.XPATH, "//*[contains(text(), 'International/Domestic Credit/Debit Cards')]"))
+            if args.payment == 'card':
+                js_click(driver.find_element(By.XPATH, "//*[contains(text(), 'International/Domestic Credit/Debit Cards')]"))
             js_click(driver.find_element(By.CSS_SELECTOR, "button.btn.btn-primary.hidden-xs.ng-star-inserted"))
             wait_to_load()
 
@@ -420,15 +428,22 @@ def continue_booking(step):
 
         if step <= 7:
             logging.info(f'on payment gateway')
-            # driver.implicitly_wait(30)
-            fill_input(driver.find_element(By.ID, 'gl_card_number'), card['number'])
-            fill_input(driver.find_element(By.ID, 'gl_card_expiryDate'), card['exp'])
-            fill_input(driver.find_element(By.ID, 'gl_card_securityCode'), card['cvv'])
-            fill_input(driver.find_element(By.ID, 'gl_billing_addressPostalCode'), card['postal'])
-            js_click(driver.find_element(By.ID, 'network_dcc_2'))
-            js_click(driver.find_element(By.ID, 'continue_in_foreign_currency_button'))
-            if not dryrun:
-                js_click(driver.find_element(By.ID, 'card_paynow_button'))
+            if args.payment == 'card':
+                # driver.implicitly_wait(30)
+                fill_input(driver.find_element(By.ID, 'gl_card_number'), card['number'])
+                fill_input(driver.find_element(By.ID, 'gl_card_expiryDate'), card['exp'])
+                fill_input(driver.find_element(By.ID, 'gl_card_securityCode'), card['cvv'])
+                fill_input(driver.find_element(By.ID, 'gl_billing_addressPostalCode'), card['postal'])
+                js_click(driver.find_element(By.ID, 'network_dcc_2'))
+                js_click(driver.find_element(By.ID, 'continue_in_foreign_currency_button'))
+                if not dryrun:
+                    js_click(driver.find_element(By.ID, 'card_paynow_button'))
+            else: # wallet
+                otp = input('Enter wallet otp: ')
+                fill_input(driver.find_element(By.XPATH, '//input[@type="number"]'), otp)
+                if not dryrun:
+                    js_click(driver.find_element(By.XPATH, '//button[normalize-space(text())="CONFIRM"]'))
+
 
     except:
         logging.exception('Error continuing booking')
