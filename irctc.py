@@ -43,6 +43,7 @@ from gmail import get_otp
 
 work_dir = Path(sys.argv[0]).parent
 cred_dir = work_dir / 'creds'
+init_url = 'https://www.irctc.co.in/nget/train-search'
 
 with open(cred_dir / 'openai_key.json') as f:
     api_key = json.load(f)
@@ -97,12 +98,17 @@ parser.add_argument('-p', "--payment", help="payment method to use",
                     default='card')
 parser.add_argument('-o', "--otp", help="fetch otp from email",
                                         action="store_true")
+parser.add_argument('-l', "--lite", help="lite mode–autofill passengers and payment info",
+                                        action="store_true")
 args = parser.parse_args()
 
 payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
         else 'IRCTC eWallet'
 
-default_wait = 5 # secs
+if args.lite:
+    default_wait = 10 * 60 # secs
+else:
+    default_wait = 5 # secs
 
 ist_tz = timezone(timedelta(hours=5,minutes=30))
 today_date = date.today()
@@ -125,11 +131,15 @@ with open(cred_dir / 'login.json') as f:
     login = json.load(f)
 
 dryrun = args.dryrun
-autocaptcha = not args.noautocaptcha
+autocaptcha = not args.noautocaptcha and not args.lite
 if dryrun:
     print('this is a dry run. will stop at the final step')
 if not autocaptcha:
     print('auto captcha disabled.')
+
+if args.lite and args.auto:
+    print('auto is not available in lite mode')
+    args.auto = False
 
 with open('config.json') as f:
     service = Service(executable_path=json.load(f)['chrome_driver'])
@@ -190,7 +200,7 @@ def continue_booking(step):
         if step <= 0:
             logging.info('init')
 
-            driver.get('https://www.irctc.co.in/nget/train-search')
+            driver.get(init_url)
 
         if step <= 1:
             logging.info('login screen')
@@ -491,6 +501,10 @@ def continue_booking(step):
         driver.implicitly_wait(default_wait)
         continue_booking(step)
 
-continue_booking(0)
+if args.lite:
+    driver.get(init_url)
+    continue_booking(4)
+else:
+    continue_booking(0)
 
 _ = input('Enter to quit')
