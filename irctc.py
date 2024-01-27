@@ -10,7 +10,6 @@ import sys
 import time
 import pickle
 import os.path
-import time
 import json
 import traceback
 import argparse
@@ -26,7 +25,8 @@ logging.basicConfig(
 logging.getLogger().addHandler(logging.StreamHandler())
 
 from io import BytesIO
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
+from datetime import time as datetime_time
 from pathlib import Path
 
 from selenium.webdriver.chrome.service import Service
@@ -103,6 +103,13 @@ payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
         else 'IRCTC eWallet'
 
 default_wait = 5 # secs
+
+ist_tz = timezone(timedelta(hours=5,minutes=30))
+today_date = date.today()
+tatkal_time_local = datetime_time(10, 00)
+tatkal_time = datetime.combine(today_date,
+                               tatkal_time_local,
+                               ist_tz)
 
 with open(cred_dir / 'journey.json') as f:
     journey = json.load(f)
@@ -305,7 +312,10 @@ def continue_booking(step):
                 
                 if 'disable-book' in bookBtn.get_attribute("class"):
                     logging.info('book now disabled. will retry after some time...')
-                    time.sleep(10)
+                    if tatkal_time - datetime.now(ist_tz) < timedelta(seconds=10):
+                        time.sleep(2)
+                    else:
+                        time.sleep(10)
                     js_click(
                         driver.find_element(
                             By.XPATH,
