@@ -60,6 +60,7 @@ parser.add_argument('-o', "--otp", help="fetch otp from email",
                                         action="store_true")
 parser.add_argument('-l', "--lite", help="lite mode–autofill passengers and payment info",
                                         action="store_true")
+parser.add_argument("--overrides", help="path to the source overrides location")
 args = parser.parse_args()
 
 payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
@@ -156,6 +157,21 @@ with open('config.json') as f:
 
 chrome_options = Options()
 chrome_options.add_argument("--window-size=1920,1080")
+if args.overrides:
+    chrome_options.add_argument("--auto-open-devtools-for-tabs")
+    prefs = {
+            "devtools" : {
+                "file_system_paths": {
+                    args.overrides: "overrides"
+                },
+                "preferences": {
+                    "currentDockState": "\"bottom\"",
+                    "panel-selectedTab": "\"sources\"",
+                    "persistenceNetworkOverridesEnabled": "true",
+                    }
+                }
+            }
+    chrome_options.add_experimental_option("prefs", prefs)
 # if args.auto:
 #    chrome_options.add_argument("--headless=new")
 driver = webdriver.Chrome(service=service, options=chrome_options)
