@@ -45,8 +45,73 @@ work_dir = Path(sys.argv[0]).parent
 cred_dir = work_dir / 'creds'
 init_url = 'https://www.irctc.co.in/nget/train-search'
 
-with open(cred_dir / 'openai_key.json') as f:
-    api_key = json.load(f)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-d', "--dryrun", help="dry run; stop before payment",
+                                        action="store_true")
+parser.add_argument('-n', "--noautocaptcha", help="dont try to solve captcha",
+                                        action="store_true")
+parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
+                                        action="store_true")
+parser.add_argument('-p', "--payment", help="payment method to use",
+                                        choices=['card', 'wallet'],
+                    default='card')
+parser.add_argument('-o', "--otp", help="fetch otp from email",
+                                        action="store_true")
+parser.add_argument('-l', "--lite", help="lite mode–autofill passengers and payment info",
+                                        action="store_true")
+args = parser.parse_args()
+
+payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
+        else 'IRCTC eWallet'
+
+if args.lite:
+    default_wait = 10 * 60 # secs
+else:
+    default_wait = 5 # secs
+
+ist_tz = timezone(timedelta(hours=5,minutes=30))
+today_date = date.today()
+tatkal_time_local = datetime_time(10, 00)
+tatkal_time = datetime.combine(today_date,
+                               tatkal_time_local,
+                               ist_tz)
+
+with open(cred_dir / 'journey.json') as f:
+    journey = json.load(f)
+
+if args.payment == 'card':
+    with open(cred_dir / 'card.json') as f:
+        card = json.load(f)
+else:
+    card = {}
+
+if 'date' not in journey:
+    d = date.today() + timedelta(days=1)
+    journey['date'] = d.strftime('%d/%m/%Y')
+
+if args.lite:
+    login = {}
+else:
+    with open(cred_dir / 'login.json') as f:
+        login = json.load(f)
+
+dryrun = args.dryrun
+autocaptcha = not args.noautocaptcha and not args.lite
+if dryrun:
+    print('this is a dry run. will stop at the final step')
+if not autocaptcha:
+    print('auto captcha disabled.')
+
+if args.lite and args.auto:
+    print('auto is not available in lite mode')
+    args.auto = False
+
+if autocaptcha:
+    with open(cred_dir / 'openai_key.json') as f:
+        api_key = json.load(f)
+else:
+    api_key = ''
 
 def solve_captcha(base64_image):
     headers = {
@@ -86,61 +151,6 @@ def solve_captcha(base64_image):
     except:
         return -1
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-d', "--dryrun", help="dry run; stop before payment",
-                                        action="store_true")
-parser.add_argument('-n', "--noautocaptcha", help="dont try to solve captcha",
-                                        action="store_true")
-parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
-                                        action="store_true")
-parser.add_argument('-p', "--payment", help="payment method to use",
-                                        choices=['card', 'wallet'],
-                    default='card')
-parser.add_argument('-o', "--otp", help="fetch otp from email",
-                                        action="store_true")
-parser.add_argument('-l', "--lite", help="lite mode–autofill passengers and payment info",
-                                        action="store_true")
-args = parser.parse_args()
-
-payment_sel = 'Multiple Payment Service' if args.payment == 'card' \
-        else 'IRCTC eWallet'
-
-if args.lite:
-    default_wait = 10 * 60 # secs
-else:
-    default_wait = 5 # secs
-
-ist_tz = timezone(timedelta(hours=5,minutes=30))
-today_date = date.today()
-tatkal_time_local = datetime_time(10, 00)
-tatkal_time = datetime.combine(today_date,
-                               tatkal_time_local,
-                               ist_tz)
-
-with open(cred_dir / 'journey.json') as f:
-    journey = json.load(f)
-
-with open(cred_dir / 'card.json') as f:
-    card = json.load(f)
-
-if 'date' not in journey:
-    d = date.today() + timedelta(days=1)
-    journey['date'] = d.strftime('%d/%m/%Y')
-
-with open(cred_dir / 'login.json') as f:
-    login = json.load(f)
-
-dryrun = args.dryrun
-autocaptcha = not args.noautocaptcha and not args.lite
-if dryrun:
-    print('this is a dry run. will stop at the final step')
-if not autocaptcha:
-    print('auto captcha disabled.')
-
-if args.lite and args.auto:
-    print('auto is not available in lite mode')
-    args.auto = False
-
 with open('config.json') as f:
     service = Service(executable_path=json.load(f)['chrome_driver'])
 
@@ -166,10 +176,13 @@ def wait_to_load():
     driver.implicitly_wait(default_wait)
 
 
-train = journey["train"]
-cls   = journey["class"]
-date  = datetime.strptime(
-        journey["date"] , '%d/%m/%Y').strftime('%d %b')
+if not args.lite:
+    train = journey["train"]
+    cls   = journey["class"]
+    date  = datetime.strptime(
+            journey["date"] , '%d/%m/%Y').strftime('%d %b')
+else:
+    train, cls, date = None, None, None
 
 def fill_input(elem, content):
     for _ in range(10): elem.send_keys(Keys.RIGHT)
@@ -348,7 +361,6 @@ def continue_booking(step):
 
             for i, px in enumerate(journey["psngs"]):
                 if i > 3: break
-                logging.info(f'adding passenger {px}')
                 if len(driver.find_elements(By.CSS_SELECTOR, 'app-passenger')) < i+1:
                     time.sleep(0.1)
                     js_click(
@@ -358,6 +370,8 @@ def continue_booking(step):
                     _ = driver.find_element(By.XPATH, f"//*[count(.//app-passenger) > {i}]")
 
                 appPx = driver.find_elements(By.CSS_SELECTOR, 'app-passenger')[i]
+
+                logging.info(f'adding passenger {px}')
 
                 pName = appPx\
                 .find_element(By.CSS_SELECTOR, 'input[placeholder="Passenger Name"]')
