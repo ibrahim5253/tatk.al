@@ -163,7 +163,7 @@ if args.overrides:
             "devtools" : {
                 "file_system_paths": {
                     args.overrides: "overrides"
-                },
+                    },
                 "preferences": {
                     "currentDockState": "\"bottom\"",
                     "panel-selectedTab": "\"sources\"",
@@ -225,6 +225,7 @@ def get_step(elem):
         raise ValueError('No matching step')
 
 def continue_booking(step):
+    global booking_start_ts
     try:
         if step <= 0:
             logging.info('init')
@@ -373,7 +374,6 @@ def continue_booking(step):
 
         if step <= 4:
             logging.info('passenger input')
-            booking_start_ts = datetime.utcnow()
 
             for i, px in enumerate(journey["psngs"]):
                 if i > 3: break
@@ -531,6 +531,7 @@ def continue_booking(step):
         driver.implicitly_wait(default_wait)
         continue_booking(step)
 
+booking_start_ts = datetime.utcnow()
 if args.lite:
     driver.get(init_url)
     continue_booking(4)
