@@ -432,7 +432,7 @@ def continue_booking(step):
 
         # Review booking
 
-        if step <= 5:
+        if step <= 5 and not args.lite:
             logging.info(f'reviewing booking')
             captchaResp = None
             while True:
