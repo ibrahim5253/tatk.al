@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 import requests
 import time
 
@@ -218,17 +219,31 @@ def encrypt(e, t):
 
     return base64.b64encode(ciphertext).decode('utf-8')
 
-def api_call(endpoint, *, headers={}, **kwargs):
-    endpoint = ENDPOINTS[endpoint]
-    path = endpoint['path']
-    method = endpoint.get('method', 'post')
-    url = f"{BASE_URL}/{path}".format(**kwargs)
+__last_response = None
+
+def api_call(target, *, headers={}, **kwargs):
+    global __last_response
+
+    if endpoint := ENDPOINTS.get(target):
+        path = endpoint['path']
+        method = endpoint.get('method', 'post')
+        url = f"{BASE_URL}/{path}".format(**kwargs)
+        payload = {'json': endpoint.get('payload', lambda **kw: kw)(**kwargs)}
+    else:
+        url = target
+        method = kwargs.pop('method', 'post')
+        payload = kwargs
 
     if method == 'post':
-        payload = endpoint['payload'](**kwargs)
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, **payload)
     else:
         response = requests.get(url, headers=headers)
+
+    __last_response = response
+
+    if list(filter(lambda x: x in response.json()
+                   , ['error', 'errorMessage', 'error_description'])):
+        raise ValueError('Received an error response')
 
     return response
 
@@ -259,7 +274,7 @@ class Session(object):
         }
 
         self._access_token = \
-            requests.post('https://www.irctc.co.in/authprovider/webtoken', data=token).json()
+            api_call('https://www.irctc.co.in/authprovider/webtoken', data=token).json()
         self._csrf_token = now()
         self.user = self._api_call("user")
 
