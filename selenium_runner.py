@@ -4,6 +4,7 @@
 # In[236]:
 
 
+import asyncio
 import logging
 import subprocess
 import sys
@@ -38,7 +39,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 
-from gmail import get_otp
+from utils import get_otp, input
 
 
 work_dir = Path(sys.argv[0]).parent
@@ -56,8 +57,6 @@ parser.add_argument('-a', "--auto", help="autopilot mode; non-interactive",
 parser.add_argument('-p', "--payment", help="payment method to use",
                                         choices=['card', 'wallet'],
                     default='card')
-parser.add_argument('-o', "--otp", help="fetch otp from email",
-                                        action="store_true")
 parser.add_argument('-l', "--lite", help="lite mode–autofill passengers and payment info",
                                         action="store_true")
 parser.add_argument("--overrides", help="path to the source overrides location")
@@ -495,10 +494,8 @@ def continue_booking(step):
                 if not dryrun:
                     js_click(driver.find_element(By.ID, 'card_paynow_button'))
             else: # wallet
-                if not args.otp:
-                    otp = input('Enter wallet otp: ')
-                else:
-                    otp = get_otp(booking_start_ts, retry=args.auto) or "000000"
+                otp = asyncio.run(get_otp(booking_start_ts))
+                logging.info(f'OTP: {otp}')
                 fill_input(driver.find_element(By.XPATH, '//input[@type="number"]'), otp)
                 if not dryrun:
                     js_click(driver.find_element(By.XPATH, '//button[normalize-space(text())="CONFIRM"]'))

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os.path
 import time
@@ -15,7 +16,7 @@ from googleapiclient.errors import HttpError
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 
-def get_otp(after_ts, retry=False):
+async def get_otp(after_ts, retry=False):
   """Shows basic usage of the Gmail API.
   Lists the user's Gmail labels.
   """
@@ -58,12 +59,13 @@ def get_otp(after_ts, retry=False):
         otp = body.split('<B>')[1].split('</B>')[0].strip()
         return otp
 
-    time.sleep(1)
-    return get_otp(after_ts, retry)
+    await asyncio.sleep(1)
+    return await get_otp(after_ts, retry)
 
   except:
     logging.exception('Error retrieving OTP')
     if retry:
-        time.sleep(1)
-        return get_otp(after_ts, retry)
-
+        await asyncio.sleep(1)
+        return await get_otp(after_ts, retry)
+    asyncio.sleep(120)
+    raise
